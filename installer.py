@@ -56,19 +56,30 @@ def install_to_user_bin(script_path: str, name: str = "mux") -> None:
 
     print(f"Installed {name} to {target_path}. Make sure ~/.local/bin is in your PATH.")
 
-def download_and_install(path: str, name="mux") -> None:
+def download_and_install(path: str, name: str) -> tuple[Literal[0], str] | tuple[Literal[1], str]:
     with tempfile.TemporaryDirectory() as tmpdir:
         temp_path = os.path.join(tmpdir, name)
         
         status, msg = download(path, temp_path)
         if status == 0:
             install_to_user_bin(temp_path, name)
-            print("Installed successfully!")
+            return (0, "Installed successfully!")
         else:
-            print(f"Download failed: {msg}")
+            return (1, f"Download failed: {msg}")
 
-def main():
-    ...
+def main() -> Literal[1] | Literal[0]:
+    status, msg = download_and_install("code/main.py", "mux")
+    if status != 0:
+        print(f"Failed to install main.py: {msg}")
+        return 1
+    
+    status, msg = download("code/config.conf", os.path.expanduser("~/.config/mux/mux.conf"))
+    if status != 0:
+        print(f"Failed to download config.conf: {msg}")
+        return 1
+    else:
+        print("Config downloaded successfully.")
+        return 0
 
 if __name__ == '__main__':
-    download("code/main.py")
+    exit(main())
