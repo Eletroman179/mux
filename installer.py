@@ -1,3 +1,4 @@
+from time import sleep
 import os
 import stat
 import base64
@@ -110,6 +111,8 @@ def main() -> int:
     else:
         print(f"Config downloaded successfully. msg: {config_msg}")
     
+    print("Running nano in 1 second")
+    sleep(1)    
     run_cmd(["nano", os.path.join(get_real_user_home(), ".config/mux/mux.conf")])
     return 0
 
