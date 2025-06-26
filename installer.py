@@ -59,7 +59,7 @@ def download_and_install(path: str, name: str) -> tuple[int, str]:
         if status == 0:
             install_status, install_msg = install_to_user_bin(temp_path, name)
             if install_status == 0:
-                return (0, "Installed successfully!")
+                return (0, f"Installed successfully! msg: {install_msg}")
             else:
                 return (1, install_msg)
         else:
