@@ -4,7 +4,17 @@ import base64
 import shutil
 import requests
 import tempfile
+import pwd
 
+def get_real_user_home() -> str:
+    # Get the username of the user who invoked sudo
+    sudo_user = os.environ.get('SUDO_USER')
+    if sudo_user:
+        # Lookup the home directory of that user
+        return pwd.getpwnam(sudo_user).pw_dir
+    else:
+        # Not running under sudo, use current user
+        return os.path.expanduser("~")
 
 def download(path: str, download_to="") -> tuple[int, str]:
     url = f'https://api.github.com/repos/Eletroman179/mux/contents/{path}'
@@ -31,8 +41,6 @@ def download(path: str, download_to="") -> tuple[int, str]:
         return (1, f'Error 404: {path} not found in repository.')
     else:
         return (1, f'Error {res.status_code}: Could not fetch content.')
-
-
 
 def install_to_user_bin(script_path: str, name: str = "mux") -> tuple[int, str]:
     """
@@ -76,7 +84,7 @@ def main() -> int:
         print(f"Main file downloaded successfully. msg: {msg}")
 
     # Ensure config directory exists
-    config_dir = os.path.expanduser("~/.config/mux")
+    config_dir = os.path.join(get_real_user_home(), ".config/mux")
     os.makedirs(config_dir, exist_ok=True)
 
     # Attempt to download config, warn if missing
