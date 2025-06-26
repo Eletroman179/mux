@@ -511,7 +511,6 @@ def perform_action(action, pkg) -> None:
     """
     Perform install/remove/update using available package managers.
     """
-    run_cmd(["pacman", "-Sy"], sudo=True)
     for manager in PACKAGE_MANAGERS:
         manager_name = manager.get("name")
         if not manager_name:
