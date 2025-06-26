@@ -525,7 +525,8 @@ def perform_action(action, pkg) -> None:
         print_color(f"Trying to {action} with {manager_name}", GREEN)
 
         sudo = manager.get("sudo", False)
-        flag = manager.get("flag", "")
+        install_flag = manager.get("install_flag", "")
+        remove_flag = manager.get("remove_flag", "")
 
         opts = []
 
@@ -542,15 +543,15 @@ def perform_action(action, pkg) -> None:
 
             if manager_name == "flatpak":
                 remote = manager.get("remote", "flathub")  # Use remote from config, default to 'flathub'
-                opts = [flag, "-y", remote, pkg]
+                opts = [install_flag, "-y", remote, pkg]
             else:
-                opts = [flag if flag else "-S", pkg]
+                opts = [install_flag if install_flag else "-S", pkg]
 
         elif action == "remove":
             if manager_name == "flatpak":
                 opts = ["uninstall", "-y", pkg]
             else:
-                opts = ["-R", pkg]
+                opts = [remove_flag, pkg]
 
         elif action == "update":
             if manager_name == "flatpak":
@@ -563,7 +564,7 @@ def perform_action(action, pkg) -> None:
                 )
                 return
             else:
-                opts = [flag if flag else "-S", pkg]
+                opts = [install_flag if install_flag else "-S", pkg]
 
         cmd = []
         if sudo:
