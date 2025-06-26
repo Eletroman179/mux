@@ -39,12 +39,12 @@ def download(path: str, download_to="") -> tuple[Literal[0], str] | tuple[Litera
 
 def install_to_user_bin(script_path: str, name: str = "mux") -> None:
     """
-    Copies the script to ~/.local/bin with the given name and makes it executable.
+    Copies the script to /usr/bin with the given name and makes it executable.
     
     :param script_path: Path to your script file
-    :param name: Name of the executable to create in ~/.local/bin (default: 'mux')
+    :param name: Name of the executable to create in /usr/bin/ (default: 'mux')
     """
-    target_dir = os.path.expanduser("~/.local/bin")
+    target_dir = os.path.expanduser("/usr/bin")
     os.makedirs(target_dir, exist_ok=True)
 
     target_path = os.path.join(target_dir, name)
@@ -54,7 +54,7 @@ def install_to_user_bin(script_path: str, name: str = "mux") -> None:
     st = os.stat(target_path)
     os.chmod(target_path, st.st_mode | stat.S_IEXEC)
 
-    print(f"Installed {name} to {target_path}. Make sure ~/.local/bin is in your PATH.")
+    print(f"Installed {name} to {target_path}. Make sure /usr/bin is in your PATH.")
 
 def download_and_install(path: str, name: str) -> tuple[Literal[0], str] | tuple[Literal[1], str]:
     with tempfile.TemporaryDirectory() as tmpdir:
