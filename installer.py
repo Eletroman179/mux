@@ -70,13 +70,15 @@ def main() -> int:
     if status != 0:
         print(f"Failed to install main.py: {msg}")
         return 1
+    else:
+        print(f"Main file downloaded successfully. msg: {msg}")
 
     # Attempt to download config, warn if missing
     config_status, config_msg = download("code/config.conf", os.path.expanduser("~/.config/mux/mux.conf"))
     if config_status != 0:
         print(f"Warning: Config file missing or not downloaded: {config_msg}")
     else:
-        print("Config downloaded successfully.")
+        print(f"Config downloaded successfully. msg: {msg}")
     return 0
 
 if __name__ == '__main__':
