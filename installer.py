@@ -7,28 +7,22 @@ import tempfile
 
 
 def download(path: str, download_to="") -> tuple[int, str]:
-    """Downloads a file from GitHub.
-
-    Args:
-        path (str): The path to the GitHub file.
-        download_to (str, optional): The file path to download to. Defaults to "".
-
-    Returns:
-        tuple[int, str]: (0, success message) or (1, error message).
-    """
     url = f'https://api.github.com/repos/Eletroman179/mux/contents/{path}'
     res = requests.get(url)
 
     if res.status_code == 200:
         data = res.json()
-        content = base64.b64decode(data.get('content', ''))
+        content_base64 = data.get('content', '')
+        if not content_base64:
+            return (1, f"No content found for {path}")
+
+        content = base64.b64decode(content_base64)
 
         download_to = os.path.expanduser(download_to or path)
         parent_dir = os.path.dirname(download_to)
         if parent_dir:
             os.makedirs(parent_dir, exist_ok=True)
 
-        # Write as binary to support all file types
         with open(download_to, 'wb') as file:
             file.write(content)
 
@@ -37,6 +31,7 @@ def download(path: str, download_to="") -> tuple[int, str]:
         return (1, f'Error 404: {path} not found in repository.')
     else:
         return (1, f'Error {res.status_code}: Could not fetch content.')
+
 
 
 def install_to_user_bin(script_path: str, name: str = "mux") -> tuple[int, str]:
