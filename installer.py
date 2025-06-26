@@ -5,6 +5,22 @@ import shutil
 import requests
 import tempfile
 import pwd
+import pty
+
+def run_cmd(cmd, sudo=False) -> int:
+    if sudo:
+        cmd = ["sudo"] + cmd
+
+    print(f"🔧 Running: {' '.join(cmd)}", flush=True)
+
+    try:
+        # pty.spawn takes care of all the terminal stuff for us
+        exitcode = pty.spawn(cmd)
+        return 0 if exitcode == 0 else 1
+    except Exception as e:
+        print(f"❌ Command failed: {' '.join(cmd)}")
+        print(str(e))
+        return 1
 
 def get_real_user_home() -> str:
     # Get the username of the user who invoked sudo
@@ -93,6 +109,8 @@ def main() -> int:
         print(f"Warning: Config file missing or not downloaded: {config_msg}")
     else:
         print(f"Config downloaded successfully. msg: {config_msg}")
+    
+    run_cmd(["nano", os.path.join(get_real_user_home(), ".config/mux/mux.conf")])
     return 0
 
 
