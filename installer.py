@@ -5,15 +5,16 @@ import shutil
 import requests
 import tempfile
 
+
 def download(path: str, download_to="") -> tuple[int, str]:
-    """Downloads a file from github
+    """Downloads a file from GitHub.
 
     Args:
-        path (str): The path to the github file
-        download_to (str, optional): The file that it will download to. Defaults to "".
+        path (str): The path to the GitHub file.
+        download_to (str, optional): The file path to download to. Defaults to "".
 
     Returns:
-        tuple[int, str]: (0, success message) or (1, error message)
+        tuple[int, str]: (0, success message) or (1, error message).
     """
     url = f'https://api.github.com/repos/Eletroman179/mux/contents/{path}'
     res = requests.get(url)
@@ -23,7 +24,9 @@ def download(path: str, download_to="") -> tuple[int, str]:
         content = base64.b64decode(data.get('content', ''))
 
         download_to = os.path.expanduser(download_to or path)
-        os.makedirs(os.path.dirname(download_to), exist_ok=True) if os.path.dirname(download_to) else None
+        parent_dir = os.path.dirname(download_to)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
 
         # Write as binary to support all file types
         with open(download_to, 'wb') as file:
@@ -35,6 +38,7 @@ def download(path: str, download_to="") -> tuple[int, str]:
     else:
         return (1, f'Error {res.status_code}: Could not fetch content.')
 
+
 def install_to_user_bin(script_path: str, name: str = "mux") -> tuple[int, str]:
     """
     Copies the script to /usr/bin with the given name and makes it executable.
@@ -45,12 +49,14 @@ def install_to_user_bin(script_path: str, name: str = "mux") -> tuple[int, str]:
     try:
         shutil.copy(script_path, target_path)
         st = os.stat(target_path)
-        os.chmod(target_path, st.st_mode | stat.S_IEXEC)
+        # Set executable bits for user, group, and others
+        os.chmod(target_path, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
         return (0, f"Installed {name} to {target_path}. Make sure /usr/bin is in your PATH.")
     except PermissionError:
         return (1, "Permission denied: You need to run this script as root (use sudo).")
     except Exception as e:
         return (1, f"Failed to install: {e}")
+
 
 def download_and_install(path: str, name: str) -> tuple[int, str]:
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -65,6 +71,7 @@ def download_and_install(path: str, name: str) -> tuple[int, str]:
         else:
             return (1, f"Download failed: {msg}")
 
+
 def main() -> int:
     status, msg = download_and_install("code/main.py", "mux")
     if status != 0:
@@ -73,13 +80,18 @@ def main() -> int:
     else:
         print(f"Main file downloaded successfully. msg: {msg}")
 
+    # Ensure config directory exists
+    config_dir = os.path.expanduser("~/.config/mux")
+    os.makedirs(config_dir, exist_ok=True)
+
     # Attempt to download config, warn if missing
-    config_status, config_msg = download("code/config.conf", os.path.expanduser("~/.config/mux/mux.conf"))
+    config_status, config_msg = download("code/config.conf", os.path.join(config_dir, "mux.conf"))
     if config_status != 0:
         print(f"Warning: Config file missing or not downloaded: {config_msg}")
     else:
-        print(f"Config downloaded successfully. msg: {msg}")
+        print(f"Config downloaded successfully. msg: {config_msg}")
     return 0
+
 
 if __name__ == '__main__':
     exit(main())
