@@ -13,56 +13,20 @@ import termios
 import tty
 import pty
 import ast
-import configparser
 from typing import Any
 
-
-# Sorry
 def get_config_path() -> str:
     config_dir = os.path.expanduser("~/.config/mux")
     os.makedirs(config_dir, exist_ok=True)
     return os.path.join(config_dir, "mux.conf")
 
-
-def unescape_ansi_quoted(s: str) -> str:
-    if s.startswith('"') and s.endswith('"'):
-        s = s[1:-1]
-    return s.encode("utf-8").decode("unicode_escape")
-
-
-def try_convert(value: str) -> float | int | str | bool:
-    value = unescape_ansi_quoted(value)
-
-    v = value.lower()
-    if v in ("true", "yes", "on"):
-        return True
-    if v in ("false", "no", "off"):
-        return False
-    try:
-        if "." in value:
-            return float(value)
-        else:
-            return int(value)
-    except ValueError:
-        return value
-
-
 def load_config() -> dict:
     path = get_config_path()
-    config = configparser.ConfigParser()
-    config.optionxform = str  # type: ignore
     if os.path.exists(path):
-        config.read(path)
-        result = {}
-        for section in config.sections():
-            result[section] = {k: try_convert(v) for k, v in config[section].items()}
-        if config.defaults():
-            result["DEFAULT"] = {
-                k: try_convert(v) for k, v in config.defaults().items()
-            }
-        return result
-    return {}
-
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    else:
+        return {}
 
 config = load_config()
 
@@ -76,16 +40,9 @@ RESET = colors.get("RESET", "")
 
 general = config.get("general", {})
 
-editor = general.get("editor")
-show_warning = general.get("show_warning")
-package_managers_str = general.get("PACKAGE_MANAGERS")
-
-if package_managers_str:
-    import ast
-
-    PACKAGE_MANAGERS = ast.literal_eval(package_managers_str)
-else:
-    print("PACKAGE_MANAGERS not found in config.")
+PACKAGE_MANAGERS = general.get("PACKAGE_MANAGERS", [])
+show_warning = general.get("show_warning", False)
+editor = general.get("editor", "nano")
 
 SUPPORTED_ACTIONS = [
     "install",
@@ -183,32 +140,42 @@ def run_cmd(cmd, sudo=False) -> int:
 
 def is_installed(pkg) -> bool:
     for manager in PACKAGE_MANAGERS:
-        if shutil.which(manager):
-            if manager == "flatpak":
-                result = subprocess.run(
-                    ["flatpak", "list"],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                )
-                if pkg.lower() in result.stdout.lower():
-                    return True
-            elif manager == "pacman":
-                result = subprocess.run(
-                    [manager, "-Q", pkg], stdout=subprocess.PIPE, stderr=subprocess.PIPE
-                )
-                if result.returncode == 0:
-                    return True
-            else:
-                result = subprocess.run(
-                    [manager, "-Qi", pkg],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                )
-                if result.returncode == 0:
-                    return True
-    return False
+        manager_name = manager.get("name")
+        if not manager_name:
+            continue
 
+        if not shutil.which(manager_name):
+            continue
+
+        if manager_name == "flatpak":
+            result = subprocess.run(
+                ["flatpak", "list"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            if pkg.lower() in result.stdout.lower():
+                return True
+
+        elif manager_name == "pacman":
+            result = subprocess.run(
+                [manager_name, "-Q", pkg],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            if result.returncode == 0:
+                return True
+
+        else:
+            result = subprocess.run(
+                [manager_name, "-Qi", pkg],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            if result.returncode == 0:
+                return True
+
+    return False
 
 def is_up_to_date(pkg) -> bool:
     """Check if the package is up-to-date (pacman only)."""
@@ -544,20 +511,27 @@ def perform_action(action, pkg) -> None:
     """
     Perform install/remove/update using available package managers.
     """
+    run_cmd(["pacman", "-Sy"], sudo=True)
     for manager in PACKAGE_MANAGERS:
-        if not shutil.which(manager):
+        manager_name = manager.get("name")
+        if not manager_name:
+            continue
+
+        if not shutil.which(manager_name):
             continue
 
         print_color("=" * 60, GREEN)
-        print_color(f"Trying to {action} with {manager}", GREEN)
+        print_color(f"Trying to {action} with {manager_name}", GREEN)
 
-        sudo = manager == "pacman"
+        sudo = manager.get("sudo", False)
+        flag = manager.get("flag", "")
+
         opts = []
 
         if action == "install":
             if is_installed(pkg):
                 print_color(f"{pkg} is already installed.", YELLOW)
-                if manager != "flatpak" and is_up_to_date(pkg):
+                if manager_name != "flatpak" and is_up_to_date(pkg):
                     print_color(
                         f"{pkg} is already up-to-date. Skipping installation.", YELLOW
                     )
@@ -565,19 +539,20 @@ def perform_action(action, pkg) -> None:
                 else:
                     return
 
-            if manager == "flatpak":
-                opts = ["install", "-y", "flathub", pkg]
+            if manager_name == "flatpak":
+                remote = manager.get("remote", "flathub")  # Use remote from config, default to 'flathub'
+                opts = [flag, "-y", remote, pkg]
             else:
-                opts = ["-S", pkg]
+                opts = [flag if flag else "-S", pkg]
 
         elif action == "remove":
-            if manager == "flatpak":
+            if manager_name == "flatpak":
                 opts = ["uninstall", "-y", pkg]
             else:
                 opts = ["-R", pkg]
 
         elif action == "update":
-            if manager == "flatpak":
+            if manager_name == "flatpak":
                 opts = ["update", "-y"]
             elif not pkg:
                 opts = ["-Syu"]
@@ -587,17 +562,23 @@ def perform_action(action, pkg) -> None:
                 )
                 return
             else:
-                opts = ["-S", pkg]
+                opts = [flag if flag else "-S", pkg]
 
-        if run_cmd([manager] + opts, sudo=sudo) == 0:
+        cmd = []
+        if sudo:
+            cmd.append("sudo")
+        cmd.append(manager_name)
+        cmd.extend(opts)
+
+        if run_cmd(cmd) == 0:
             print_color("=" * 60, GREEN)
             return
+
     print_color("=" * 60, GREEN)
     print_color(
-        "❌ No supported package manager succeeded (pacman, yay, paru, flatpak).                        :(",
+        "❌ No supported package manager succeeded.                         :(",
         RED,
     )
-
 
 if __name__ == "__main__":
     main()
