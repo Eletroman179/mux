@@ -96,33 +96,45 @@ def download_and_install(path: str, name: str) -> tuple[int, str]:
 
 def pretty_inline_list(data, indent_level=4):
     indent = ' ' * indent_level
-    items = []
-    for item in data:
-        item_str = json.dumps(item, separators=(',', ': '))
-        items.append(f"{indent}{item_str}")
+    items = [f"{indent}{json.dumps(item, separators=(',', ': '))}" for item in data]
     closing_indent = ' ' * (indent_level - 2)
     return "[\n" + ",\n".join(items) + "\n" + closing_indent + "]"
 
-def dump_inline_pm(config, path):
+def dump_inline(config, path):
     tmp_config = dict(config)
-    pkg_managers = tmp_config["general"].pop("PACKAGE_MANAGERS", [])
+    general = dict(tmp_config.get("general", {}))
 
+    # Extract and remove fields you want to format inline
+    pkg_managers = general.pop("PACKAGE_MANAGERS", [])
+    update_cmd = general.pop("update_command", None)
+
+    tmp_config["general"] = general  # remove inline fields temporarily
+
+    # Pretty print the rest of config
     buffer = StringIO()
     json.dump(tmp_config, buffer, indent=2)
     result = buffer.getvalue()
 
-    inline_pkg = pretty_inline_list(pkg_managers, indent_level=4)
+    # Generate inline JSON for the two fields
+    inline_pm = pretty_inline_list(pkg_managers, indent_level=4)
+    inline_uc = json.dumps(update_cmd, separators=(',', ': ')) if update_cmd else "{}"
 
+    # Prepare the inline lines to insert
+    indent = "  "
+    inline_lines = f'\n{indent}  "PACKAGE_MANAGERS": {inline_pm},\n{indent}  "update_command": {inline_uc},'
+
+    # Inject inline fields back into "general"
     parts = result.split('"general": {')
+    if len(parts) != 2:
+        with open(path, "w") as f:
+            json.dump(config, f, indent=2)
+        return
+
     before = parts[0] + '"general": {'
     after = parts[1]
+    final = before + inline_lines + after
 
-    indent = "  "
-    inline_line = f'\n{indent}  "PACKAGE_MANAGERS": {inline_pkg},'
-
-    new_general = inline_line + after
-    final = before + new_general
-
+    # Write final result
     with open(path, "w") as f:
         f.write(final)
 
@@ -139,7 +151,21 @@ def add_pm(path: str, name: str, install_flag: str, remove_flag: str, sudo: bool
 
     config["general"]["PACKAGE_MANAGERS"].append(pm)
 
-    dump_inline_pm(config, path)
+    dump_inline(config, path)
+    
+def change_uc(path: str, name: str, flag: str, sudo: bool):
+    pm = {
+        "name": name, 
+        "flag": flag, 
+        "sudo": sudo
+    }
+        
+    with open(path, "r") as f:
+        config = json.load(f)
+
+    config["general"]["update_command"] = pm
+
+    dump_inline(config, path)
 
 def remove_all_pm(path: str):
     with open(path, "r") as f:
@@ -176,6 +202,24 @@ def prompt_pm() -> tuple[str, str, str, bool]:
 
         sudo = sudo_str.lower() == "true"
         return name, install_flag, remove_flag, sudo
+    
+def prompt_uc() -> tuple[str, str, bool]:
+    while True:
+        raw = prompt_input("Enter package manager (format: name, flag, sudo [true/false])")
+        parts = [p.strip() for p in raw.split(",")]
+
+        if len(parts) != 3:
+            print("❌ Please enter exactly 3 comma-separated values.")
+            continue
+
+        name, flag, sudo_str = parts
+
+        if sudo_str.lower() not in ["true", "false"]:
+            print("❌ 'sudo' must be 'true' or 'false'.")
+            continue
+
+        sudo = sudo_str.lower() == "true"
+        return name, flag, sudo
 
 def main() -> int:
     usr_action = prompt_input("What type of install would you like?", ["Custom", "Default"])
@@ -202,8 +246,7 @@ def main() -> int:
     num_pkg_magr = 0
     
     if usr_action.lower() == "c":
-        rm_pm = True if prompt_input("Would you like to change the package managers?", ["Yes", "No"]).lower() == "y" else False
-        if rm_pm:
+        if prompt_input("Would you like to change the package managers?", ["Yes", "No"]).lower() == "y":
             remove_all_pm(config_path)
             
             # Get how many package managers to add
@@ -217,6 +260,10 @@ def main() -> int:
             for _ in repeat(0, num_pkg_magr):
                 name, install_flag, remove_flag, sudo = prompt_pm()
                 add_pm(config_path, name, install_flag, remove_flag, sudo)
+        
+        if prompt_input("Would you like to change the update command?", ["Yes", "No"]).lower() == "y":
+            name_update, flag_update, sudo_update = prompt_uc()
+            change_uc(config_path, name_update, flag_update, sudo_update)
             
     print("Running nano in 1 second")
     sleep(1)    
