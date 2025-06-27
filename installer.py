@@ -107,7 +107,7 @@ def add_pm(path: str, name: str, install_flag: str, remove_flag: str, sudo: bool
     config["general"]["PACKAGE_MANAGERS"].append(pm)
 
     with open(path, "w") as f:
-        json.dump(config, f, indent=2)
+        json.dump(config, f, separators=(',', ': '))
 
 def remove_all_pm(path: str):
     with open(path, "r") as f:
