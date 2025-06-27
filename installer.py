@@ -94,45 +94,35 @@ def download_and_install(path: str, name: str) -> tuple[int, str]:
         else:
             return (1, f"Download failed: {msg}")
 
+def pretty_inline_list(data, indent_level=4):
+    indent = ' ' * indent_level
+    items = []
+    for item in data:
+        item_str = json.dumps(item, separators=(',', ': '))
+        items.append(f"{indent}{item_str}")
+    closing_indent = ' ' * (indent_level - 2)
+    return "[\n" + ",\n".join(items) + "\n" + closing_indent + "]"
+
 def dump_inline_pm(config, path):
-    # 1. Pretty print entire JSON with indent=2, but no PACKAGE_MANAGERS for now
-    tmp_config = dict(config)  # shallow copy
+    tmp_config = dict(config)
     pkg_managers = tmp_config["general"].pop("PACKAGE_MANAGERS", [])
 
-    # Dump config without PACKAGE_MANAGERS
     buffer = StringIO()
     json.dump(tmp_config, buffer, indent=2)
     result = buffer.getvalue()
 
-    # 2. Create inline JSON for PACKAGE_MANAGERS list
-    inline_pkg = json.dumps(pkg_managers, separators=(',', ': '))
+    inline_pkg = pretty_inline_list(pkg_managers, indent_level=4)
 
-    # 3. Inject the inline PACKAGE_MANAGERS back into the string
-    # Find where to insert: look for the line with "general":
-    insert_point = result.find('"general": {')
-    if insert_point == -1:
-        # fallback: just dump normally
-        with open(path, "w") as f:
-            json.dump(config, f, indent=2)
-        return
-
-    # Prepare the inline line to insert (with indentation)
-    indent = "  "  # 2 spaces for inside general
-    inline_line = f'\n{indent}  "PACKAGE_MANAGERS": {inline_pkg},'
-
-    # Insert inline PACKAGE_MANAGERS after "general": {
     parts = result.split('"general": {')
     before = parts[0] + '"general": {'
     after = parts[1]
 
-    # Inject the inline package managers as first entry inside "general"
-    # Remove any existing PACKAGE_MANAGERS lines from after (optional)
-    # For safety, just insert at start
-    new_general = inline_line + after
+    indent = "  "
+    inline_line = f'\n{indent}  "PACKAGE_MANAGERS": {inline_pkg},'
 
+    new_general = inline_line + after
     final = before + new_general
 
-    # 4. Write final result to file
     with open(path, "w") as f:
         f.write(final)
 
