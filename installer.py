@@ -181,7 +181,7 @@ def prompt_input(prompt: str, ops=[]) -> str:
     formatted_ops = " ".join(f"[{i[0].upper()}]{i[1:]}" for i in ops)
     if ops:
         print(f"=>> {formatted_ops}")
-    usr = input("=>>")
+    usr = input("=>> ")
         
     return usr
 
